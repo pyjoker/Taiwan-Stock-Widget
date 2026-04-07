@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+/* ── 全域重置：透明背景，確保視窗穿透效果 ── */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── 自訂 utilities（Tailwind v4 CSS-first 模式） ── */
+@layer utilities {
+  /* 毛玻璃效果 */
+  .glass {
+    background: rgba(15, 15, 25, 0.55);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  /* 視窗拖曳區 */
+  .drag-region {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  /* 拖曳區內的可互動元素，需加此 class 取消拖曳行為 */
+  .no-drag {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+}
+
+/* ── 捲軸樣式（Webkit） ── */
+::-webkit-scrollbar {
+  width: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── 動畫：bounce（loading 點） ── */
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
