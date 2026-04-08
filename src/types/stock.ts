@@ -30,51 +30,6 @@ export interface StockInfo {
   market: StockMarket
 }
 
-/** TWSE API 回應原始結構（msgArray 中的每筆） */
-export interface RawTWSEItem {
-  /** 股票代碼 */
-  c: string
-  /** 股票名稱 */
-  n: string
-  /** 成交價（盤後為 "-"） */
-  z: string
-  /** 昨收價 */
-  y: string
-  /** 漲跌額（帶正負號） */
-  ch: string
-  /** 成交量（張） */
-  v: string
-  /** 市場別 "tse" | "otc" */
-  ex: string
-  /** 開盤價 */
-  o: string
-  /** 最高價 */
-  h: string
-  /** 最低價 */
-  l: string
-}
-
-/** TWSE API 完整回應 */
-export interface TWSEApiResponse {
-  msgArray: RawTWSEItem[]
-  referer: string
-  userDelay: number
-  rtcode: string
-  queryTime: {
-    sysDate: string
-    stockInfoItem: number
-    stockInfo: number
-    sessionStr: string
-    sysTime: string
-    showChart: boolean
-    sessionFromTime: number
-    sessionLatestTime: number
-  }
-  rtmessage: string
-  exKey: string
-  cachedAlive: number
-}
-
 /** localStorage 儲存的 key */
 export const STORAGE_KEY = 'tsw-stocks'
 

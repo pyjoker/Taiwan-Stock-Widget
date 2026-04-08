@@ -1,7 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { fetchStocksFromTWSE, autoDetectMarket } from './stockApi'
+import { fetchStocksFromYahoo, autoDetectMarket } from './yahooFinanceService'
 import type { StockSymbol } from '../../src/types/stock'
 
 let mainWindow: BrowserWindow | null = null
@@ -50,7 +50,7 @@ function createWindow(): void {
 
 /** 取得股票行情 */
 ipcMain.handle('fetch-stocks', async (_event, symbols: StockSymbol[]) => {
-  return fetchStocksFromTWSE(symbols)
+  return fetchStocksFromYahoo(symbols)
 })
 
 /** 自動偵測市場別 */

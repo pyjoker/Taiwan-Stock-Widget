@@ -6,6 +6,9 @@ directories:
   buildResources: resources
   output: dist-electron
 
+extraResources:
+  - stock_bridge.py
+
 files:
   - '!**/.vscode/*'
   - '!src/*'
