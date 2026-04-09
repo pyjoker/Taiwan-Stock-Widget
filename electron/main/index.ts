@@ -10,7 +10,7 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 380,
     height: 520,
-    minWidth: 280,
+    minWidth: 200,
     minHeight: 100,
     show: false,
     frame: false,
@@ -66,6 +66,15 @@ ipcMain.handle('minimize-window', () => {
 /** 關閉應用程式 */
 ipcMain.handle('close-window', () => {
   app.quit()
+})
+
+/** 調整視窗大小（同時更新最小尺寸限制） */
+ipcMain.handle('set-window-size', (_event, width: number, height: number) => {
+  const w = Math.round(width)
+  const h = Math.round(height)
+  // 先更新最小尺寸，否則 Electron 會把 setSize 的值 clamp 到 minWidth
+  mainWindow?.setMinimumSize(Math.min(w, 280), 50)
+  mainWindow?.setSize(w, h)
 })
 
 // ─── App Lifecycle ────────────────────────────────────────────────────────────

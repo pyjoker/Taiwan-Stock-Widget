@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 
 interface AddStockModalProps {
-  onAdd: (codes: string) => Promise<void>
+  onAdd: (codes: string) => Promise<string[]>
   onClose: () => void
 }
 
 export function AddStockModal({ onAdd, onClose }: AddStockModalProps): JSX.Element {
   const [inputValue, setInputValue] = useState('')
   const [isAdding, setIsAdding] = useState(false)
+  const [notFoundCodes, setNotFoundCodes] = useState<string[]>([])
   const [autoStartEnabled, setAutoStartEnabled] = useState(false) // TODO: 開機自動啟動 placeholder
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -30,10 +31,22 @@ export function AddStockModal({ onAdd, onClose }: AddStockModalProps): JSX.Eleme
     if (!trimmed || isAdding) return
 
     setIsAdding(true)
+    setNotFoundCodes([])
     try {
-      await onAdd(trimmed)
-      setInputValue('')
-      onClose()
+      const notFound = await onAdd(trimmed)
+      if (notFound.length > 0) {
+        setNotFoundCodes(notFound)
+        // Remove not-found codes from input; keep any that were valid
+        const remaining = trimmed
+          .split(',')
+          .map((c) => c.trim().toUpperCase())
+          .filter((c) => notFound.includes(c))
+          .join(', ')
+        setInputValue(remaining)
+      } else {
+        setInputValue('')
+        onClose()
+      }
     } catch (err) {
       console.error('[AddStockModal] 新增失敗:', err)
     } finally {
@@ -62,15 +75,25 @@ export function AddStockModal({ onAdd, onClose }: AddStockModalProps): JSX.Eleme
             ref={inputRef}
             type="text"
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            onChange={(e) => { setInputValue(e.target.value); setNotFoundCodes([]) }}
             onKeyDown={handleKeyDown}
-            placeholder="輸入代碼，多個用逗號分隔（如 2330, 6488）"
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder-white/25 outline-none transition-all duration-150 focus:border-white/20 focus:bg-white/8"
+            placeholder="台股或美股代碼，逗號分隔（如 2330, AAPL）"
+            className={`w-full rounded-lg border bg-white/5 px-3 py-2 text-sm text-white/90 placeholder-white/25 outline-none transition-all duration-150 focus:bg-white/8 ${
+              notFoundCodes.length > 0
+                ? 'border-red-400/40 focus:border-red-400/60'
+                : 'border-white/10 focus:border-white/20'
+            }`}
             disabled={isAdding}
           />
-          <p className="mt-1 text-xs text-white/30">
-            系統將自動判斷上市（tse）或上櫃（otc）
-          </p>
+          {notFoundCodes.length > 0 ? (
+            <p className="mt-1 text-xs text-red-400/80">
+              找不到代碼：{notFoundCodes.join('、')}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-white/30">
+              自動判斷台股上市／上櫃或美股
+            </p>
+          )}
         </div>
 
         {/* 操作按鈕 */}

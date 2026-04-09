@@ -1,25 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { StockSymbol, StockInfo } from '../types/stock'
-import { DEFAULT_SYMBOLS, STORAGE_KEY } from '../types/stock'
+import { DEFAULT_SYMBOLS, STORAGE_KEY, getGroupStorageKey } from '../types/stock'
 
 const REFRESH_INTERVAL_MS = 10_000 // 10 秒
 
-/** 從 localStorage 讀取已儲存的股票清單，解析失敗時回傳預設值 */
-function loadSymbols(): StockSymbol[] {
+/** 從 localStorage 讀取已儲存的股票清單；群組 1 解析失敗時回傳預設值，其他群組回傳空陣列 */
+function loadSymbols(key: string): StockSymbol[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return DEFAULT_SYMBOLS
+    const raw = localStorage.getItem(key)
+    if (!raw) return key === STORAGE_KEY ? DEFAULT_SYMBOLS : []
     const parsed = JSON.parse(raw) as StockSymbol[]
     if (Array.isArray(parsed) && parsed.length > 0) return parsed
-    return DEFAULT_SYMBOLS
+    return key === STORAGE_KEY ? DEFAULT_SYMBOLS : []
   } catch {
-    return DEFAULT_SYMBOLS
+    return key === STORAGE_KEY ? DEFAULT_SYMBOLS : []
   }
-}
-
-/** 儲存股票清單至 localStorage */
-function saveSymbols(symbols: StockSymbol[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(symbols))
 }
 
 export interface UseStockDataReturn {
@@ -29,15 +24,22 @@ export interface UseStockDataReturn {
   isLoading: boolean
   isError: boolean
   lastUpdated: Date | null
-  addStock: (codes: string) => Promise<void>
+  /** 新增股票；回傳找不到的代碼清單 */
+  addStock: (codes: string) => Promise<string[]>
   removeStock: (code: string) => void
+  /** 拖曳排序：將 fromIndex 的股票移到 toIndex */
+  reorderStocks: (fromIndex: number, toIndex: number) => void
   refresh: () => Promise<void>
 }
 
 const MAX_HISTORY = 30 // 最多保留 30 個價格點
 
-export function useStockData(): UseStockDataReturn {
-  const [symbols, setSymbols] = useState<StockSymbol[]>(loadSymbols)
+export function useStockData(groupId: number): UseStockDataReturn {
+  // 用 ref 追蹤當前 storageKey，讓 addStock / removeStock callback 永遠拿到最新值
+  const storageKeyRef = useRef(getGroupStorageKey(groupId))
+  storageKeyRef.current = getGroupStorageKey(groupId)
+
+  const [symbols, setSymbols] = useState<StockSymbol[]>(() => loadSymbols(getGroupStorageKey(groupId)))
   const [stocks, setStocks] = useState<StockInfo[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isError, setIsError] = useState(false)
@@ -63,7 +65,11 @@ export function useStockData(): UseStockDataReturn {
 
     try {
       const result = await window.api.fetchStocks(syms)
-      setStocks(result)
+      // 依 syms 順序排列結果，確保拖曳排序不被 API 回傳順序覆蓋
+      const ordered = syms
+        .map((sym) => result.find((r) => r.code === sym.code))
+        .filter((r): r is StockInfo => r !== undefined)
+      setStocks(ordered)
       setLastUpdated(new Date())
 
       // 累積價格歷史
@@ -94,6 +100,20 @@ export function useStockData(): UseStockDataReturn {
     fetchData(symbols)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 切換群組時重新載入該群組的股票清單並立即 fetch
+  useEffect(() => {
+    const key = getGroupStorageKey(groupId)
+    const newSymbols = loadSymbols(key)
+    setSymbols(newSymbols)
+    symbolsRef.current = newSymbols
+    priceHistoryRef.current = new Map()
+    setPriceHistory(new Map())
+    setStocks([])
+    setLastUpdated(null)
+    setIsError(false)
+    fetchData(newSymbols)
+  }, [groupId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // 每 10 秒自動 refresh
   useEffect(() => {
     const timer = setInterval(() => {
@@ -103,26 +123,28 @@ export function useStockData(): UseStockDataReturn {
     return () => clearInterval(timer) // unmount 時清除，避免記憶體洩漏
   }, [fetchData])
 
-  /** 新增股票：支援逗號分隔多股，自動偵測市場別 */
+  /** 新增股票：支援逗號分隔多股，自動偵測市場別；回傳找不到的代碼清單 */
   const addStock = useCallback(
-    async (codes: string) => {
+    async (codes: string): Promise<string[]> => {
       const codeList = codes
         .split(',')
         .map((c) => c.trim().toUpperCase())
         .filter(Boolean)
 
-      if (codeList.length === 0) return
+      if (codeList.length === 0) return []
 
       const currentCodes = new Set(symbolsRef.current.map((s) => s.code))
       const newSymbols: StockSymbol[] = []
+      const notFound: string[] = []
 
       for (const code of codeList) {
         if (currentCodes.has(code)) continue // 跳過重複
 
-        // 自動偵測市場別
+        // 自動偵測市場別（tse / otc / us）
         const market = await window.api.detectMarket(code)
         if (market === null) {
           console.warn(`[useStockData] 找不到股票代碼: ${code}`)
+          notFound.push(code)
           continue
         }
 
@@ -130,12 +152,14 @@ export function useStockData(): UseStockDataReturn {
         currentCodes.add(code)
       }
 
-      if (newSymbols.length === 0) return
+      if (newSymbols.length > 0) {
+        const updated = [...symbolsRef.current, ...newSymbols]
+        setSymbols(updated)
+        localStorage.setItem(storageKeyRef.current, JSON.stringify(updated))
+        await fetchData(updated)
+      }
 
-      const updated = [...symbolsRef.current, ...newSymbols]
-      setSymbols(updated)
-      saveSymbols(updated)
-      await fetchData(updated)
+      return notFound
     },
     [fetchData]
   )
@@ -144,8 +168,23 @@ export function useStockData(): UseStockDataReturn {
   const removeStock = useCallback((code: string) => {
     const updated = symbolsRef.current.filter((s) => s.code !== code)
     setSymbols(updated)
-    saveSymbols(updated)
+    localStorage.setItem(storageKeyRef.current, JSON.stringify(updated))
     setStocks((prev) => prev.filter((s) => s.code !== code))
+  }, [])
+
+  /** 拖曳排序：將 fromIndex 移到 toIndex */
+  const reorderStocks = useCallback((fromIndex: number, toIndex: number) => {
+    const arr = [...symbolsRef.current]
+    const [item] = arr.splice(fromIndex, 1)
+    arr.splice(toIndex, 0, item)
+    setSymbols(arr)
+    localStorage.setItem(storageKeyRef.current, JSON.stringify(arr))
+    setStocks((prev) => {
+      const next = [...prev]
+      const [stock] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, stock)
+      return next
+    })
   }, [])
 
   return {
@@ -157,6 +196,7 @@ export function useStockData(): UseStockDataReturn {
     lastUpdated,
     addStock,
     removeStock,
+    reorderStocks,
     refresh
   }
 }

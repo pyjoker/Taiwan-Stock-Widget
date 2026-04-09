@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react'
 import type { StockInfo } from '../types/stock'
 import { StockItem } from './StockItem'
 
@@ -7,9 +8,35 @@ interface StockListProps {
   grayMode: boolean
   isLoading: boolean
   onRemove: (code: string) => void
+  onReorder: (fromIndex: number, toIndex: number) => void
 }
 
-export function StockList({ stocks, priceHistory, grayMode, isLoading, onRemove }: StockListProps): JSX.Element {
+export function StockList({ stocks, priceHistory, grayMode, isLoading, onRemove, onReorder }: StockListProps): JSX.Element {
+  const [dragCode, setDragCode] = useState<string | null>(null)
+  const [overCode, setOverCode] = useState<string | null>(null)
+
+  // 拖曳中即時顯示重排後的順序
+  const displayedStocks = useMemo(() => {
+    if (!dragCode || !overCode || dragCode === overCode) return stocks
+    const from = stocks.findIndex((s) => s.code === dragCode)
+    const to = stocks.findIndex((s) => s.code === overCode)
+    if (from === -1 || to === -1) return stocks
+    const arr = [...stocks]
+    const [item] = arr.splice(from, 1)
+    arr.splice(to, 0, item)
+    return arr
+  }, [stocks, dragCode, overCode])
+
+  const handleDrop = (): void => {
+    if (dragCode && overCode && dragCode !== overCode) {
+      const from = stocks.findIndex((s) => s.code === dragCode)
+      const to = stocks.findIndex((s) => s.code === overCode)
+      if (from !== -1 && to !== -1) onReorder(from, to)
+    }
+    setDragCode(null)
+    setOverCode(null)
+  }
+
   // 空清單提示
   if (stocks.length === 0 && !isLoading) {
     return (
@@ -48,14 +75,30 @@ export function StockList({ stocks, priceHistory, grayMode, isLoading, onRemove 
       {/* 股票列表 */}
       {stocks.length > 0 && (
         <div className="space-y-1 p-2">
-          {stocks.map((stock) => (
-            <StockItem
+          {displayedStocks.map((stock) => (
+            <div
               key={stock.code}
-              stock={stock}
-              sparkData={priceHistory.get(stock.code) ?? []}
-              grayMode={grayMode}
-              onRemove={onRemove}
-            />
+              draggable
+              onDragStart={(e) => {
+                setDragCode(stock.code)
+                e.dataTransfer.effectAllowed = 'move'
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                if (stock.code !== dragCode) setOverCode(stock.code)
+              }}
+              onDrop={handleDrop}
+              onDragEnd={() => { setDragCode(null); setOverCode(null) }}
+              className={`transition-opacity duration-100 ${dragCode === stock.code ? 'opacity-40' : 'opacity-100'} ${dragCode ? 'cursor-grabbing' : 'cursor-grab'}`}
+            >
+              <StockItem
+                stock={stock}
+                sparkData={priceHistory.get(stock.code) ?? []}
+                grayMode={grayMode}
+                onRemove={onRemove}
+              />
+            </div>
           ))}
         </div>
       )}

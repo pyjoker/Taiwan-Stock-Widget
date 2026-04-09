@@ -95,7 +95,7 @@ def _tw_name(code: str, yahoo_fallback: str) -> str:
 
 def fetch_stocks(symbols: list) -> list:
     """
-    symbols: list of {code: str, market: "tse"|"otc"}
+    symbols: list of {code: str, market: "tse"|"otc"|"us"}
     Returns list of StockInfo-compatible dicts.
     """
     if not symbols:
@@ -107,8 +107,13 @@ def fetch_stocks(symbols: list) -> list:
     for s in symbols:
         code = s["code"]
         market = s["market"]
-        suffix = ".TW" if market == "tse" else ".TWO"
-        ticker_to_info[f"{code}{suffix}"] = {"code": code, "market": market}
+        if market == "us":
+            ticker_sym = code  # US tickers have no suffix (e.g. AAPL, TSLA)
+        elif market == "tse":
+            ticker_sym = f"{code}.TW"
+        else:
+            ticker_sym = f"{code}.TWO"
+        ticker_to_info[ticker_sym] = {"code": code, "market": market}
 
     _jitter(0.3, 1.0)
 
@@ -135,7 +140,12 @@ def fetch_stocks(symbols: list) -> list:
             change_percent = (change / yesterday_close * 100) if yesterday_close != 0 else 0.0
 
         yahoo_name = (q.get("shortName") or q.get("longName") or info["code"]).strip()
-        name = _tw_name(info["code"], yahoo_name)
+        # For US stocks, always use Yahoo's name; TW stocks use Chinese name lookup
+        name = yahoo_name if info["market"] == "us" else _tw_name(info["code"], yahoo_name)
+
+        raw_volume = _safe_float(q.get("regularMarketVolume"))
+        # TW stocks: divide by 1000 for 張 (lot) convention; US stocks: keep raw shares
+        volume = round(raw_volume) if info["market"] == "us" else round(raw_volume / 1000)
 
         result.append({
             "code": info["code"],
@@ -146,8 +156,7 @@ def fetch_stocks(symbols: list) -> list:
             "changePercent": change_percent,
             "high": _safe_float(q.get("regularMarketDayHigh")),
             "low": _safe_float(q.get("regularMarketDayLow")),
-            # Yahoo returns raw shares; divide by 1000 for TWSE 張 (lot) convention
-            "volume": round(_safe_float(q.get("regularMarketVolume")) / 1000),
+            "volume": volume,
             "isAfterHours": is_after_hours,
             "market": info["market"],
         })
@@ -159,9 +168,10 @@ def fetch_stocks(symbols: list) -> list:
 
 def detect_market(code: str):
     """
-    Try TSE (.TW) then OTC (.TWO).
-    Returns "tse", "otc", or null (JSON null).
+    Try TSE (.TW) then OTC (.TWO) then plain ticker (US).
+    Returns "tse", "otc", "us", or null (JSON null).
     """
+    # Try Taiwan markets first (TSE and TPEx)
     for market, suffix in [("tse", ".TW"), ("otc", ".TWO")]:
         _jitter(0.2, 0.6)
         ticker_sym = f"{code}{suffix}"
@@ -174,6 +184,21 @@ def detect_market(code: str):
                     return market
         except Exception:
             pass
+
+    # Try as US ticker (plain code, no suffix)
+    _jitter(0.2, 0.6)
+    try:
+        t = Ticker(code)
+        price_data = t.price
+        q = price_data.get(code)
+        if isinstance(q, dict):
+            # Confirm it's a real US-listed equity by checking exchange info
+            exchange = q.get("exchangeName", "") or q.get("fullExchangeName", "") or ""
+            if q.get("regularMarketPrice") is not None or q.get("regularMarketPreviousClose") is not None:
+                if exchange and "Taiwan" not in exchange and "TWS" not in exchange:
+                    return "us"
+    except Exception:
+        pass
 
     return None
 

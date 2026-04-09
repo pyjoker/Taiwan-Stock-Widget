@@ -16,14 +16,48 @@ function formatNumber(n: number, decimals = 2): string {
   })
 }
 
-/** 格式化成交量（萬張以上顯示 xx.x萬） */
-function formatVolume(v: number): string {
-  if (v >= 10000) return `${(v / 10000).toFixed(1)}萬`
-  return v.toLocaleString('zh-TW')
+/** 格式化台股成交量（萬張以上顯示 xx.x萬） */
+function formatVolumeTW(v: number): string {
+  if (v >= 10000) return `${(v / 10000).toFixed(1)}萬張`
+  return `${v.toLocaleString('zh-TW')}張`
+}
+
+/** 格式化美股成交量（股數，K/M/B） */
+function formatVolumeUS(v: number): string {
+  if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)}B`
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`
+  return v.toLocaleString('en-US')
+}
+
+/** 極簡模式單行：只顯示代碼 + 現價 */
+export function CompactStockRow({ stock, grayMode }: { stock: StockInfo; grayMode: boolean }): JSX.Element {
+  const { code, price, change, isAfterHours, market } = stock
+  const pd = market !== 'us' && price >= 1000 ? 0 : 2
+  const colorClass = grayMode
+    ? 'text-white/50'
+    : isAfterHours || change === 0
+      ? 'text-gray-400'
+      : change > 0
+        ? 'text-red-400'
+        : 'text-green-400'
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-[5px]">
+      <span className={`font-mono text-xs font-semibold ${grayMode ? 'text-white/50' : 'text-white/85'}`}>{code}</span>
+      <span className={`font-mono text-xs font-bold ${colorClass}`}>
+        {formatNumber(price, pd)}
+      </span>
+    </div>
+  )
 }
 
 export function StockItem({ stock, sparkData, grayMode, onRemove }: StockItemProps): JSX.Element {
-  const { code, name, price, change, changePercent, high, low, volume, isAfterHours } = stock
+  const { code, name, price, change, changePercent, high, low, volume, isAfterHours, market } = stock
+  const formatVolume = market === 'us' ? formatVolumeUS : formatVolumeTW
+
+  // 台股千元以上取整數，其餘保留兩位小數
+  const pd = market !== 'us' && price >= 1000 ? 0 : 2
 
   // 決定漲跌顏色（台灣慣例：漲紅跌綠）；灰色模式時一律用股票名稱色
   const colorClass = grayMode
@@ -56,20 +90,20 @@ export function StockItem({ stock, sparkData, grayMode, onRemove }: StockItemPro
               <span className="text-white/40">--</span>
             ) : (
               <>
-                <span>{changeSign}{formatNumber(change)}</span>
+                <span>{changeSign}{formatNumber(change, pd)}</span>
                 <span className="text-white/20">·</span>
                 <span>{changeSign}{formatNumber(changePercent)}%</span>
               </>
             )}
             <span className="text-white/20">·</span>
-            <span className="text-white/40">{formatVolume(volume)}張</span>
+            <span className="text-white/40">{formatVolume(volume)}</span>
           </div>
         </div>
 
         {/* 當日高低價：緊貼左側內容 */}
         <div className="flex flex-col text-xs">
-          <span className={grayMode ? 'text-white/50' : 'text-red-400/70'}>{isAfterHours ? '--' : formatNumber(high)}</span>
-          <span className={grayMode ? 'text-white/50' : 'text-green-400/70'}>{isAfterHours ? '--' : formatNumber(low)}</span>
+          <span className={grayMode ? 'text-white/50' : 'text-red-400/70'}>{isAfterHours ? '--' : formatNumber(high, pd)}</span>
+          <span className={grayMode ? 'text-white/50' : 'text-green-400/70'}>{isAfterHours ? '--' : formatNumber(low, pd)}</span>
         </div>
       </div>
 
@@ -77,7 +111,7 @@ export function StockItem({ stock, sparkData, grayMode, onRemove }: StockItemPro
       <div className="no-drag flex items-center gap-2 text-right">
         <SparkLine data={sparkData} colorClass={colorClass} />
         <span className={`font-mono text-base font-bold ${colorClass}`}>
-          {formatNumber(price)}
+          {formatNumber(price, pd)}
         </span>
         {/* 刪除按鈕：只在 hover 時顯示 */}
         <button

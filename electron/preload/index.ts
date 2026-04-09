@@ -8,13 +8,17 @@ contextBridge.exposeInMainWorld('api', {
   fetchStocks: (symbols: StockSymbol[]): Promise<StockInfo[]> =>
     ipcRenderer.invoke('fetch-stocks', symbols),
 
-  /** 自動偵測股票市場別（tse / otc） */
-  detectMarket: (code: string): Promise<'tse' | 'otc' | null> =>
+  /** 自動偵測股票市場別（tse / otc / us） */
+  detectMarket: (code: string): Promise<'tse' | 'otc' | 'us' | null> =>
     ipcRenderer.invoke('detect-market', code),
 
   /** 最小化視窗 */
   minimizeWindow: (): Promise<void> => ipcRenderer.invoke('minimize-window'),
 
   /** 關閉應用程式 */
-  closeWindow: (): Promise<void> => ipcRenderer.invoke('close-window')
+  closeWindow: (): Promise<void> => ipcRenderer.invoke('close-window'),
+
+  /** 調整視窗大小 */
+  setWindowSize: (width: number, height: number): Promise<void> =>
+    ipcRenderer.invoke('set-window-size', width, height)
 })

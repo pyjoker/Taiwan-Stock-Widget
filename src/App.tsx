@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { TitleBar } from './components/TitleBar'
 import { StockList } from './components/StockList'
 import { AddStockModal } from './components/AddStockModal'
+import { CompactStockRow } from './components/StockItem'
 import { useStockData } from './hooks/useStockData'
 
 /** 格式化時間為 HH:mm:ss */
@@ -10,11 +11,61 @@ function formatTime(date: Date): string {
 }
 
 export default function App(): JSX.Element {
-  const { stocks, priceHistory, isLoading, isError, lastUpdated, addStock, removeStock } = useStockData()
+  const [activeGroup, setActiveGroup] = useState(1)
+  const { stocks, priceHistory, isLoading, isError, lastUpdated, addStock, removeStock, reorderStocks } = useStockData(activeGroup)
   const [showModal, setShowModal] = useState(false)
   const [titleBarVisible, setTitleBarVisible] = useState(true)
   const [grayMode, setGrayMode] = useState(false)
+  const [compactMode, setCompactMode] = useState(false)
 
+  // 極簡模式：依股票代碼長度與數量動態調整視窗大小
+  const symbolsKey = stocks.map((s) => s.code).join(',')
+  useEffect(() => {
+    if (compactMode) {
+      // font-mono text-xs ≈ 7.5px/char；px-3×2=24px；gap-3=12px；8px buffer
+      const CHAR_W = 7.5
+      const maxCodeChars = stocks.length > 0 ? Math.max(...stocks.map((s) => s.code.length)) : 4
+      const maxPriceChars = 8 // "1,234.56" 最多 8 字元
+      const w = Math.ceil(maxCodeChars * CHAR_W + 12 + maxPriceChars * CHAR_W + 24 + 8)
+      const h = Math.max(72, stocks.length * 26 + 22)
+      window.api.setWindowSize(w, h)
+    } else {
+      window.api.setWindowSize(380, 520)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compactMode, symbolsKey])
+
+  const toggleCompact = (): void => setCompactMode((v) => !v)
+
+  // ── 極簡模式 layout ──────────────────────────────────────────────────────────
+  if (compactMode) {
+    return (
+      <div className="glass flex h-screen flex-col rounded-2xl overflow-hidden select-none">
+        {/* 極簡股票列 */}
+        <div className="drag-region flex flex-1 flex-col overflow-hidden pt-1">
+          {stocks.map((stock) => (
+            <CompactStockRow key={stock.code} stock={stock} grayMode={grayMode} />
+          ))}
+        </div>
+
+        {/* 極簡底列：可拖曳 + 展開按鈕 */}
+        <div className="drag-region flex items-center justify-end border-t border-white/5 px-2 h-[22px]">
+          <button
+            className="no-drag flex h-5 w-5 items-center justify-center rounded text-white/25 transition-all duration-150 hover:bg-white/10 hover:text-white/70"
+            onClick={toggleCompact}
+            title="退出極簡模式"
+            aria-label="退出極簡模式"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
+              <path fillRule="evenodd" d="M1.5 7A.75.75 0 0 1 2.25 6.25h2.19L2.22 4.03a.75.75 0 0 1 1.06-1.06l2.22 2.22V2.25a.75.75 0 0 1 1.5 0v4a.75.75 0 0 1-.75.75h-4A.75.75 0 0 1 1.5 7ZM9.25 2.25a.75.75 0 0 1 .75-.75h4a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0V4.31l-2.22 2.22a.75.75 0 1 1-1.06-1.06l2.22-2.22H10a.75.75 0 0 1-.75-.75ZM2.22 11.97l2.22-2.22H2.25a.75.75 0 0 1 0-1.5h4a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0v-2.19l-2.22 2.22a.75.75 0 0 1-1.06-1.06ZM13.75 9.25a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-.75.75h-4a.75.75 0 0 1 0-1.5h2.19l-2.22-2.22a.75.75 0 1 1 1.06-1.06l2.22 2.22V10a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── 一般模式 layout ──────────────────────────────────────────────────────────
   return (
     // 外層容器：毛玻璃效果 + 透明背景
     <div className="glass flex h-screen flex-col rounded-2xl overflow-hidden select-none">
@@ -27,8 +78,10 @@ export default function App(): JSX.Element {
         <TitleBar
           isLoading={isLoading}
           grayMode={grayMode}
+          compactMode={compactMode}
           onAddClick={() => setShowModal(true)}
           onToggleGrayMode={() => setGrayMode((v) => !v)}
+          onToggleCompact={toggleCompact}
           onHide={() => setTitleBarVisible(false)}
         />
       </div>
@@ -37,7 +90,26 @@ export default function App(): JSX.Element {
       {titleBarVisible && <div className="mx-3 border-t border-white/5" />}
 
       {/* 股票清單 */}
-      <StockList stocks={stocks} priceHistory={priceHistory} grayMode={grayMode} isLoading={isLoading} onRemove={removeStock} />
+      <StockList stocks={stocks} priceHistory={priceHistory} grayMode={grayMode} isLoading={isLoading} onRemove={removeStock} onReorder={reorderStocks} />
+
+      {/* 群組切換列 */}
+      <div className="drag-region flex items-center justify-center gap-0.5 border-t border-white/5 px-3 py-1">
+        {([1, 2, 3, 4, 5, 6, 7] as const).map((g) => (
+          <button
+            key={g}
+            className={`no-drag h-5 w-9 rounded text-[10px] font-mono font-semibold transition-all duration-150 ${
+              activeGroup === g
+                ? 'bg-white/20 text-white/90'
+                : 'text-white/25 hover:bg-white/10 hover:text-white/60'
+            }`}
+            onClick={() => setActiveGroup(g)}
+            title={`群組 ${g}`}
+            aria-label={`切換到群組 ${g}`}
+          >
+            {g}
+          </button>
+        ))}
+      </div>
 
       {/* 底部狀態列 */}
       <div className="drag-region flex items-center justify-between border-t border-white/5 px-3 py-1.5 gap-2">
@@ -61,7 +133,7 @@ export default function App(): JSX.Element {
         </div>
 
         {/* 市場標示 */}
-        <span className="text-[10px] text-white/15">TWSE · 每 10 秒更新</span>
+        <span className="text-[10px] text-white/15">TWSE／美股 · 每 10 秒更新</span>
 
         {/* 展開標題列按鈕（僅標題列隱藏時顯示） */}
         {!titleBarVisible && (

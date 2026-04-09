@@ -1,5 +1,5 @@
 /** 股票市場別 */
-export type StockMarket = 'tse' | 'otc'
+export type StockMarket = 'tse' | 'otc' | 'us'
 
 /** 股票識別符（清單儲存用） */
 export interface StockSymbol {
@@ -32,6 +32,11 @@ export interface StockInfo {
 
 /** localStorage 儲存的 key */
 export const STORAGE_KEY = 'tsw-stocks'
+
+/** 取得群組對應的 localStorage key（群組 1 沿用舊 key 保持向後相容） */
+export function getGroupStorageKey(groupId: number): string {
+  return groupId === 1 ? STORAGE_KEY : `${STORAGE_KEY}-g${groupId}`
+}
 
 /** 預設顯示的股票清單 */
 export const DEFAULT_SYMBOLS: StockSymbol[] = [

@@ -1,12 +1,14 @@
 interface TitleBarProps {
   isLoading: boolean
   grayMode: boolean
+  compactMode: boolean
   onAddClick: () => void
   onToggleGrayMode: () => void
+  onToggleCompact: () => void
   onHide: () => void
 }
 
-export function TitleBar({ isLoading, grayMode, onAddClick, onToggleGrayMode, onHide }: TitleBarProps): JSX.Element {
+export function TitleBar({ isLoading, grayMode, compactMode, onAddClick, onToggleGrayMode, onToggleCompact, onHide }: TitleBarProps): JSX.Element {
   const handleMinimize = (): void => {
     window.api.minimizeWindow()
   }
@@ -39,6 +41,18 @@ export function TitleBar({ isLoading, grayMode, onAddClick, onToggleGrayMode, on
 
       {/* 右側：操作按鈕（no-drag，避免被拖曳區攔截點擊） */}
       <div className="no-drag flex items-center gap-1">
+        {/* 極簡模式按鈕 */}
+        <button
+          onClick={onToggleCompact}
+          className={`flex h-6 w-6 items-center justify-center rounded-full transition-all duration-150 hover:bg-white/10 ${compactMode ? 'text-white/70' : 'text-white/40 hover:text-white/80'}`}
+          title={compactMode ? '退出極簡模式' : '極簡模式'}
+          aria-label="切換極簡模式"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
+            <path d="M2.75 5.5a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75ZM2.75 9a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75Z" />
+          </svg>
+        </button>
+
         {/* 灰色模式按鈕 */}
         <button
           onClick={onToggleGrayMode}

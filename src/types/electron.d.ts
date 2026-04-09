@@ -8,8 +8,10 @@ export interface ElectronAPI {
   minimizeWindow: () => Promise<void>
   /** 關閉應用程式 */
   closeWindow: () => Promise<void>
-  /** 自動偵測股票市場別（tse 或 otc） */
-  detectMarket: (code: string) => Promise<'tse' | 'otc' | null>
+  /** 自動偵測股票市場別（tse / otc / us） */
+  detectMarket: (code: string) => Promise<'tse' | 'otc' | 'us' | null>
+  /** 調整視窗大小 */
+  setWindowSize: (width: number, height: number) => Promise<void>
 }
 
 declare global {
