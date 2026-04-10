@@ -12,11 +12,12 @@ function formatTime(date: Date): string {
 
 export default function App(): JSX.Element {
   const [activeGroup, setActiveGroup] = useState(1)
-  const { stocks, priceHistory, isLoading, isError, lastUpdated, addStock, removeStock, reorderStocks } = useStockData(activeGroup)
+  const { stocks, priceHistory, isLoading, isError, errorMessage, lastUpdated, addStock, removeStock, reorderStocks } = useStockData(activeGroup)
   const [showModal, setShowModal] = useState(false)
   const [titleBarVisible, setTitleBarVisible] = useState(true)
   const [grayMode, setGrayMode] = useState(false)
   const [compactMode, setCompactMode] = useState(false)
+  const [isPinned, setIsPinned] = useState(true)
 
   // 極簡模式：依股票代碼長度與數量動態調整視窗大小
   const symbolsKey = stocks.map((s) => s.code).join(',')
@@ -37,6 +38,12 @@ export default function App(): JSX.Element {
 
   const toggleCompact = (): void => setCompactMode((v) => !v)
 
+  const togglePin = (): void => {
+    const next = !isPinned
+    setIsPinned(next)
+    window.api.setAlwaysOnTop(next)
+  }
+
   // ── 極簡模式 layout ──────────────────────────────────────────────────────────
   if (compactMode) {
     return (
@@ -48,8 +55,21 @@ export default function App(): JSX.Element {
           ))}
         </div>
 
-        {/* 極簡底列：可拖曳 + 展開按鈕 */}
-        <div className="drag-region flex items-center justify-end border-t border-white/5 px-2 h-[22px]">
+        {/* 極簡底列：可拖曳 + 圖釘 + 展開按鈕 */}
+        <div className="drag-region flex items-center justify-end gap-1 border-t border-white/5 px-2 h-[22px]">
+          {/* 圖釘按鈕：切換 alwaysOnTop */}
+          <button
+            className={`no-drag flex h-5 w-5 items-center justify-center rounded transition-all duration-150 hover:bg-white/10 ${
+              isPinned ? 'text-white/70' : 'text-white/25 hover:text-white/70'
+            }`}
+            onClick={togglePin}
+            title={isPinned ? '取消置頂' : '置頂視窗'}
+            aria-label={isPinned ? '取消置頂' : '置頂視窗'}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
+              <path d="M9.828.722a.5.5 0 0 1 .354.146l5 5a.5.5 0 0 1-.707.707l-.46-.46-3.182 3.181.886 1.771a.5.5 0 0 1-.097.577l-.977.976a.5.5 0 0 1-.707 0L8 10.207l-2.938 2.938a.5.5 0 0 1-.707-.707L7.293 9.5 5.062 7.27a.5.5 0 0 1 0-.707l.976-.977a.5.5 0 0 1 .578-.097l1.77.886L11.568 3.19l-.46-.46a.5.5 0 0 1 .72-.008Z"/>
+            </svg>
+          </button>
           <button
             className="no-drag flex h-5 w-5 items-center justify-center rounded text-white/25 transition-all duration-150 hover:bg-white/10 hover:text-white/70"
             onClick={toggleCompact}
@@ -122,7 +142,14 @@ export default function App(): JSX.Element {
           />
           {/* 狀態文字 */}
           {isError ? (
-            <span className="text-[10px] text-yellow-400/60">更新失敗，保留舊資料</span>
+            <span
+              className="text-[10px] text-yellow-400/60 truncate max-w-[200px]"
+              title={errorMessage ?? '未知錯誤'}
+            >
+              {errorMessage
+                ? errorMessage.replace(/^\[stockBridge\]\s*/i, '').slice(0, 60)
+                : '更新失敗，保留舊資料'}
+            </span>
           ) : lastUpdated ? (
             <span className="text-[10px] text-white/25">
               更新於 {formatTime(lastUpdated)}

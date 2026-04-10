@@ -10,10 +10,19 @@ const SCRIPT_PATH = is.dev
   ? join(process.cwd(), 'stock_bridge.py')
   : join(process.resourcesPath, 'stock_bridge.py')
 
+// Project root (dev: cwd; prod: not needed since venv ships with the app)
+const PROJECT_ROOT = is.dev ? process.cwd() : process.resourcesPath
+
+// venv Python paths relative to project root
+const VENV_PYTHON = process.platform === 'win32'
+  ? join(PROJECT_ROOT, 'venv', 'Scripts', 'python.exe')
+  : join(PROJECT_ROOT, 'venv', 'bin', 'python3')
+
 // Python executable candidates (tried in order, first success is cached)
+// venv Python is tried first so its packages (yahooquery, requests) are available
 const PYTHON_CANDIDATES = process.platform === 'win32'
-  ? ['py', 'python', 'python3']
-  : ['python3', 'python']
+  ? [VENV_PYTHON, 'py', 'python', 'python3']
+  : [VENV_PYTHON, 'python3', 'python']
 
 let resolvedPythonCmd: string | null = null
 
@@ -28,9 +37,26 @@ function spawnPython(cmd: string, args: string[]): Promise<string> {
     proc.on('close', (code) => {
       if (code === 0) {
         resolve(stdout.trim())
-      } else {
-        reject(new Error(`[stockBridge] Python exited ${code}: ${stderr.trim()}`))
+        return
       }
+
+      // Python exited non-zero: prefer the JSON error message from stdout,
+      // then fall back to the last non-empty line of stderr (the actual exception).
+      let message = ''
+      try {
+        const parsed = JSON.parse(stdout.trim()) as { error?: string }
+        if (parsed?.error) message = parsed.error
+      } catch {
+        // stdout is not JSON (e.g. import error before try/except)
+      }
+
+      if (!message) {
+        // Extract last meaningful line from stderr traceback
+        const lines = stderr.split('\n').map((l) => l.trim()).filter(Boolean)
+        message = lines.at(-1) ?? stderr.trim()
+      }
+
+      reject(new Error(message || `Python exited ${code}`))
     })
   })
 }
@@ -71,12 +97,17 @@ const marketCache = new Map<string, 'tse' | 'otc'>()
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function fetchStocksFromYahoo(symbols: StockSymbol[]): Promise<StockInfo[]> {
-  if (symbols.length === 0) return []
+export interface FetchResult {
+  stocks: StockInfo[]
+  error: string | null
+}
+
+export async function fetchStocksFromYahoo(symbols: StockSymbol[]): Promise<FetchResult> {
+  if (symbols.length === 0) return { stocks: [], error: null }
 
   const now = Date.now()
   if (now - lastFetchAt < CACHE_TTL && cache.length > 0) {
-    return cache
+    return { stocks: cache, error: null }
   }
 
   try {
@@ -86,10 +117,14 @@ export async function fetchStocksFromYahoo(symbols: StockSymbol[]): Promise<Stoc
       cache = result
       lastFetchAt = Date.now()
     }
-    return result
+    return { stocks: result, error: null }
   } catch (err) {
-    console.error('[stockBridge] fetchStocksFromYahoo failed:', err)
-    return cache.length > 0 ? cache : [] // return stale cache on transient failures
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[stockBridge] fetchStocksFromYahoo failed:', message)
+    return {
+      stocks: cache.length > 0 ? cache : [],
+      error: message
+    }
   }
 }
 

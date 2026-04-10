@@ -50,7 +50,8 @@ function createWindow(): void {
 
 /** 取得股票行情 */
 ipcMain.handle('fetch-stocks', async (_event, symbols: StockSymbol[]) => {
-  return fetchStocksFromYahoo(symbols)
+  const result = await fetchStocksFromYahoo(symbols)
+  return result // { stocks: StockInfo[], error: string | null }
 })
 
 /** 自動偵測市場別 */
@@ -66,6 +67,11 @@ ipcMain.handle('minimize-window', () => {
 /** 關閉應用程式 */
 ipcMain.handle('close-window', () => {
   app.quit()
+})
+
+/** 切換視窗是否浮在所有視窗之上 */
+ipcMain.handle('set-always-on-top', (_event, flag: boolean) => {
+  mainWindow?.setAlwaysOnTop(flag)
 })
 
 /** 調整視窗大小（同時更新最小尺寸限制） */

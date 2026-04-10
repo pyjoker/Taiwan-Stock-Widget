@@ -23,6 +23,7 @@ export interface UseStockDataReturn {
   priceHistory: Map<string, number[]>
   isLoading: boolean
   isError: boolean
+  errorMessage: string | null
   lastUpdated: Date | null
   /** 新增股票；回傳找不到的代碼清單 */
   addStock: (codes: string) => Promise<string[]>
@@ -43,6 +44,7 @@ export function useStockData(groupId: number): UseStockDataReturn {
   const [stocks, setStocks] = useState<StockInfo[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isError, setIsError] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   // 用 ref 追蹤最新 symbols，避免 setInterval 閉包問題
@@ -62,9 +64,25 @@ export function useStockData(groupId: number): UseStockDataReturn {
 
     setIsLoading(true)
     setIsError(false)
+    setErrorMessage(null)
 
     try {
-      const result = await window.api.fetchStocks(syms)
+      const { stocks: result, error } = await window.api.fetchStocks(syms)
+
+      if (error) {
+        console.error('[useStockData] fetch error from main:', error)
+        setIsError(true)
+        setErrorMessage(error)
+        // 保留上次資料（result 可能是 stale cache），不清空
+        if (result.length > 0) {
+          const ordered = syms
+            .map((sym) => result.find((r) => r.code === sym.code))
+            .filter((r): r is StockInfo => r !== undefined)
+          setStocks(ordered)
+        }
+        return
+      }
+
       // 依 syms 順序排列結果，確保拖曳排序不被 API 回傳順序覆蓋
       const ordered = syms
         .map((sym) => result.find((r) => r.code === sym.code))
@@ -83,8 +101,10 @@ export function useStockData(groupId: number): UseStockDataReturn {
       }
       setPriceHistory(new Map(map))
     } catch (err) {
-      console.error('[useStockData] fetch error:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('[useStockData] IPC error:', message)
       setIsError(true)
+      setErrorMessage(message)
       // 保留上次資料，不清空
     } finally {
       setIsLoading(false)
@@ -111,6 +131,7 @@ export function useStockData(groupId: number): UseStockDataReturn {
     setStocks([])
     setLastUpdated(null)
     setIsError(false)
+    setErrorMessage(null)
     fetchData(newSymbols)
   }, [groupId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -193,6 +214,7 @@ export function useStockData(groupId: number): UseStockDataReturn {
     priceHistory,
     isLoading,
     isError,
+    errorMessage,
     lastUpdated,
     addStock,
     removeStock,

@@ -3,7 +3,10 @@
     "allow": [
       "Bash(openspec status:*)",
       "Bash(openspec instructions:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(cmd /c \"cd /d c:\\\\Users\\\\03010430\\\\Documents\\\\Github\\\\Taiwan-Stock-Widget && npm run build\")",
+      "Bash(cmd /c \"cd /d c:\\\\Users\\\\03010430\\\\Documents\\\\Github\\\\Taiwan-Stock-Widget && npm run build 2>&1\")",
+      "Bash(powershell -Command \"cd 'C:\\\\Users\\\\03010430\\\\Documents\\\\Github\\\\Taiwan-Stock-Widget'; npm run build\")"
     ]
   }
 }
