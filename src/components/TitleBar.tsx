@@ -5,10 +5,9 @@ interface TitleBarProps {
   onAddClick: () => void
   onToggleGrayMode: () => void
   onToggleCompact: () => void
-  onHide: () => void
 }
 
-export function TitleBar({ isLoading, grayMode, compactMode, onAddClick, onToggleGrayMode, onToggleCompact, onHide }: TitleBarProps): JSX.Element {
+export function TitleBar({ isLoading, grayMode, compactMode, onAddClick, onToggleGrayMode, onToggleCompact }: TitleBarProps): JSX.Element {
   const handleMinimize = (): void => {
     window.api.minimizeWindow()
   }
@@ -23,7 +22,7 @@ export function TitleBar({ isLoading, grayMode, compactMode, onAddClick, onToggl
       {/* 左側：App 名稱 + loading 指示 */}
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold tracking-widest text-white/60 uppercase">
-          台股小工具
+          股票小工具
         </span>
         {/* Fetch 進行中動畫指示器 */}
         {isLoading && (
@@ -57,23 +56,11 @@ export function TitleBar({ isLoading, grayMode, compactMode, onAddClick, onToggl
         <button
           onClick={onToggleGrayMode}
           className={`flex h-6 w-6 items-center justify-center rounded-full transition-all duration-150 hover:bg-white/10 ${grayMode ? 'text-white/60 hover:text-white/80' : 'text-white/40 hover:text-white/80'}`}
-          title={grayMode ? '關閉灰色模式' : '開啟灰色模式'}
+          title={grayMode ? '關閉灰色模式' : '灰色模式'}
           aria-label="切換灰色模式"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
             <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1ZM2 8a6 6 0 0 1 6-6v12A6 6 0 0 1 2 8Z" />
-          </svg>
-        </button>
-
-        {/* 隱藏標題列按鈕 */}
-        <button
-          onClick={onHide}
-          className="flex h-6 w-6 items-center justify-center rounded-full text-white/40 transition-all duration-150 hover:bg-white/10 hover:text-white/80"
-          title="隱藏標題列"
-          aria-label="隱藏標題列"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
-            <path fillRule="evenodd" d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
           </svg>
         </button>
 

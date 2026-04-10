@@ -16,6 +16,7 @@ import sys
 import json
 import time
 import random
+import os
 
 import requests
 from yahooquery import Ticker
@@ -36,54 +37,95 @@ def _safe_float(val, default: float = 0.0) -> float:
 
 
 # ─── Chinese name lookup (TWSE / TPEx open data) ─────────────────────────────
-# Fetched once per process lifetime; falls back to Yahoo's name if unavailable.
+# Cached to a JSON file beside this script; refreshed after 24 hours.
+# Falls back to Yahoo's English name if lookup fails.
+
+_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tw_names_cache.json")
+_CACHE_TTL = 86_400  # 24 hours in seconds
 
 _tw_names: dict[str, str] = {}
 _tw_names_loaded = False
 
 
+def _load_cache() -> dict[str, str]:
+    """Load names from JSON cache if it exists and is still fresh."""
+    try:
+        with open(_CACHE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        if time.time() - data.get("_ts", 0) < _CACHE_TTL:
+            return {k: v for k, v in data.items() if k != "_ts"}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_cache(names: dict[str, str]) -> None:
+    """Persist names dict to JSON cache with a timestamp."""
+    try:
+        payload = dict(names)
+        payload["_ts"] = time.time()
+        with open(_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def _fetch_tw_names_from_api() -> dict[str, str]:
+    """Fetch Chinese names from TWSE and TPEx OpenAPI. Returns {} on total failure."""
+    names: dict[str, str] = {}
+
+    # 上市（TSE）— STOCK_DAY_ALL 欄位：Code / Name
+    try:
+        r = requests.get(
+            "https://opendata.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL",
+            timeout=10,
+            headers={"Accept": "application/json"},
+        )
+        if r.ok:
+            for row in r.json():
+                code = str(row.get("Code") or "").strip()
+                name = str(row.get("Name") or "").strip()
+                if code and name:
+                    names[code] = name
+    except Exception:
+        pass
+
+    # 上櫃（TPEx）— tpex_mainboard_daily_close_quotes 欄位：SecuritiesCompanyCode / CompanyName
+    try:
+        r = requests.get(
+            "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
+            timeout=10,
+            headers={"Accept": "application/json"},
+        )
+        if r.ok:
+            for row in r.json():
+                code = str(row.get("SecuritiesCompanyCode") or "").strip()
+                name = str(row.get("CompanyName") or "").strip()
+                if code and name and code not in names:
+                    names[code] = name
+    except Exception:
+        pass
+
+    return names
+
+
 def _ensure_tw_names() -> None:
-    global _tw_names_loaded
+    global _tw_names, _tw_names_loaded
     if _tw_names_loaded:
         return
-    _tw_names_loaded = True  # mark before fetching so retries don't pile up
+    _tw_names_loaded = True  # set early so concurrent calls don't pile up
 
-    # TSE listed companies (上市)
-    try:
-        r = requests.get(
-            "https://opendata.twse.com.tw/v1/company/companySummary",
-            timeout=8,
-            headers={"Accept": "application/json"},
-        )
-        if r.ok:
-            for row in r.json():
-                code = str(row.get("公司代號") or "").strip()
-                name = str(row.get("公司簡稱") or "").strip()
-                if code and name:
-                    _tw_names[code] = name
-    except Exception:
-        pass
+    # Try cache first
+    cached = _load_cache()
+    if cached:
+        _tw_names = cached
+        return
 
-    # TPEx listed companies (上櫃)
-    try:
-        r = requests.get(
-            "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_listed_companies",
-            timeout=8,
-            headers={"Accept": "application/json"},
-        )
-        if r.ok:
-            for row in r.json():
-                # Field names may be English or Chinese depending on API version
-                code = str(
-                    row.get("SecuritiesCompanyCode") or row.get("公司代號") or ""
-                ).strip()
-                name = str(
-                    row.get("CompanyAbbreviation") or row.get("公司簡稱") or ""
-                ).strip()
-                if code and name and code not in _tw_names:
-                    _tw_names[code] = name
-    except Exception:
-        pass
+    # Cache miss or expired — fetch from API and persist
+    fetched = _fetch_tw_names_from_api()
+    if fetched:
+        _tw_names = fetched
+        _save_cache(fetched)
 
 
 def _tw_name(code: str, yahoo_fallback: str) -> str:

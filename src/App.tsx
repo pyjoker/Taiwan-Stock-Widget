@@ -14,7 +14,6 @@ export default function App(): JSX.Element {
   const [activeGroup, setActiveGroup] = useState(1)
   const { stocks, priceHistory, isLoading, isError, errorMessage, lastUpdated, addStock, removeStock, reorderStocks } = useStockData(activeGroup)
   const [showModal, setShowModal] = useState(false)
-  const [titleBarVisible, setTitleBarVisible] = useState(true)
   const [grayMode, setGrayMode] = useState(false)
   const [compactMode, setCompactMode] = useState(false)
   const [isPinned, setIsPinned] = useState(true)
@@ -89,25 +88,17 @@ export default function App(): JSX.Element {
   return (
     // 外層容器：毛玻璃效果 + 透明背景
     <div className="glass flex h-screen flex-col rounded-2xl overflow-hidden select-none">
-      {/* 標題列：可收合，隱藏後留 3px 細條，hover 展開 */}
-      <div
-        className={`overflow-hidden transition-[max-height] duration-200 ${
-          titleBarVisible ? 'max-h-14' : 'max-h-[3px]'
-        }`}
-      >
-        <TitleBar
-          isLoading={isLoading}
-          grayMode={grayMode}
-          compactMode={compactMode}
-          onAddClick={() => setShowModal(true)}
-          onToggleGrayMode={() => setGrayMode((v) => !v)}
-          onToggleCompact={toggleCompact}
-          onHide={() => setTitleBarVisible(false)}
-        />
-      </div>
+      <TitleBar
+        isLoading={isLoading}
+        grayMode={grayMode}
+        compactMode={compactMode}
+        onAddClick={() => setShowModal(true)}
+        onToggleGrayMode={() => setGrayMode((v) => !v)}
+        onToggleCompact={toggleCompact}
+      />
 
-      {/* 分隔線（僅標題列顯示時） */}
-      {titleBarVisible && <div className="mx-3 border-t border-white/5" />}
+      {/* 分隔線 */}
+      <div className="mx-3 border-t border-white/5" />
 
       {/* 股票清單 */}
       <StockList stocks={stocks} priceHistory={priceHistory} grayMode={grayMode} isLoading={isLoading} onRemove={removeStock} onReorder={reorderStocks} />
@@ -162,18 +153,6 @@ export default function App(): JSX.Element {
         {/* 市場標示 */}
         <span className="text-[10px] text-white/15">TWSE／美股 · 每 10 秒更新</span>
 
-        {/* 展開標題列按鈕（僅標題列隱藏時顯示） */}
-        {!titleBarVisible && (
-          <button
-            className="no-drag ml-auto flex h-5 w-5 items-center justify-center rounded text-white/30 transition-all duration-150 hover:bg-white/10 hover:text-white/70"
-            onClick={() => setTitleBarVisible(true)}
-            title="展開標題列"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
-              <path fillRule="evenodd" d="M11.78 9.78a.75.75 0 0 1-1.06 0L8 7.06 5.28 9.78a.75.75 0 0 1-1.06-1.06l3.25-3.25a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06Z" clipRule="evenodd" />
-            </svg>
-          </button>
-        )}
       </div>
 
       {/* 新增股票 Modal */}

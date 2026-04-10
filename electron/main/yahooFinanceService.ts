@@ -76,8 +76,16 @@ function runPython(args: string[]): Promise<string> {
           resolve(out)
         })
         .catch((err: NodeJS.ErrnoException) => {
-          if (err.code === 'ENOENT') {
-            tryNext(i + 1) // executable not found, try next candidate
+          // ENOENT: executable not in PATH
+          // Also fall through when the Windows py launcher reports it can't locate
+          // a Python installation (e.g. "No Python at '...'", "not installed")
+          const msg = err.message ?? ''
+          const isLauncherMiss =
+            /no python/i.test(msg) ||
+            /not installed/i.test(msg) ||
+            /could not find/i.test(msg)
+          if (err.code === 'ENOENT' || isLauncherMiss) {
+            tryNext(i + 1) // try next candidate
           } else {
             reject(err)
           }
@@ -91,9 +99,14 @@ function runPython(args: string[]): Promise<string> {
 
 let cache: StockInfo[] = []
 let lastFetchAt = 0
+let cachedSymbolsKey = ''
 const CACHE_TTL = 15_000 // 15 s — avoid hammering Yahoo between UI refreshes
 
 const marketCache = new Map<string, 'tse' | 'otc'>()
+
+function symbolsKey(symbols: StockSymbol[]): string {
+  return symbols.map((s) => `${s.code}:${s.market}`).join(',')
+}
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -106,7 +119,9 @@ export async function fetchStocksFromYahoo(symbols: StockSymbol[]): Promise<Fetc
   if (symbols.length === 0) return { stocks: [], error: null }
 
   const now = Date.now()
-  if (now - lastFetchAt < CACHE_TTL && cache.length > 0) {
+  const key = symbolsKey(symbols)
+  // Cache hit only when same symbol set AND within TTL
+  if (now - lastFetchAt < CACHE_TTL && cache.length > 0 && key === cachedSymbolsKey) {
     return { stocks: cache, error: null }
   }
 
@@ -116,6 +131,7 @@ export async function fetchStocksFromYahoo(symbols: StockSymbol[]): Promise<Fetc
     if (result.length > 0) {
       cache = result
       lastFetchAt = Date.now()
+      cachedSymbolsKey = key
     }
     return { stocks: result, error: null }
   } catch (err) {
